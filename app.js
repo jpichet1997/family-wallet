@@ -1,6 +1,6 @@
+// นำเข้าเฉพาะ Firebase Core และ Firestore (เอา Storage ออกทั้งหมด)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, query, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDOwbbJyTjElBbRD--ZJoxBYFUFXEs6ahs",
@@ -12,31 +12,54 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const storage = getStorage(app);
 
-// State Variables (เก็บข้อมูลในหน่วยความจำเพื่อประมวลผล)
+// State Variables
 let allTx = [], wallets = [], categories = [], goals = [];
 let currentDate = new Date();
 let BUDGET = 15000;
 let selectedWalletFilter = "all";
 let txType = 'expense';
 let pieChartInst = null, barChartInst = null;
+let currentUser = localStorage.getItem('family_username'); 
 
 // ==========================================
-// 1. UI UX & Navigation (จัดการหน้าจอและโหมดกลางคืน)
+// 1. ระบบ Login & UI UX 
 // ==========================================
-const darkToggle = document.getElementById('dark-toggle');
-darkToggle.addEventListener('change', (e) => {
-    const isDark = e.target.checked;
-    document.documentElement.classList.toggle('dark', isDark);
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    if (pieChartInst || barChartInst) renderCharts(); // วาดกราฟใหม่เพื่อเปลี่ยนสีตัวหนังสือ
+const loginScreen = document.getElementById('login-screen');
+const loginForm = document.getElementById('login-form');
+const loginInput = document.getElementById('login-input');
+const displayUsername = document.getElementById('display-username');
+
+function checkLogin() {
+    if (currentUser) {
+        loginScreen.classList.add('opacity-0', 'pointer-events-none');
+        setTimeout(() => loginScreen.classList.add('hidden'), 500);
+        displayUsername.textContent = currentUser;
+    } else {
+        loginScreen.classList.remove('hidden');
+        void loginScreen.offsetWidth; 
+        loginScreen.classList.remove('opacity-0', 'pointer-events-none');
+    }
+}
+
+loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = loginInput.value.trim();
+    if (name) {
+        currentUser = name;
+        localStorage.setItem('family_username', currentUser);
+        checkLogin();
+        showToast(`ยินดีต้อนรับคุณ ${currentUser} 🌷`);
+    }
 });
 
-if (localStorage.getItem('theme') === 'dark') {
-    darkToggle.checked = true;
-    document.documentElement.classList.add('dark');
-}
+window.logout = () => {
+    localStorage.removeItem('family_username');
+    currentUser = null;
+    loginInput.value = '';
+    checkLogin();
+    document.querySelector('.nav-btn[data-target="view-home"]').click();
+};
 
 function showToast(msg) {
     const toast = document.getElementById('toast');
@@ -45,18 +68,17 @@ function showToast(msg) {
     setTimeout(() => toast.classList.replace('toast-active', 'toast-hidden'), 2500);
 }
 
-// ระบบ Navigation สลับหน้าจอ
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.view-section').forEach(s => s.classList.add('hidden'));
         document.getElementById(btn.getAttribute('data-target')).classList.remove('hidden');
         
         document.querySelectorAll('.nav-btn').forEach(b => {
-            b.classList.remove('text-blush-400', 'font-medium');
-            b.classList.add('text-stone-400');
+            b.classList.remove('text-peach-400', 'font-medium');
+            b.classList.add('text-gray-300');
         });
-        btn.classList.remove('text-stone-400');
-        btn.classList.add('text-blush-400', 'font-medium');
+        btn.classList.remove('text-gray-300');
+        btn.classList.add('text-peach-400', 'font-medium');
 
         if (btn.getAttribute('data-target') === 'view-stats') renderCharts();
     });
@@ -74,7 +96,7 @@ onSnapshot(doc(db, "settings", "user_pref"), docSnap => {
 
 onSnapshot(collection(db, "wallets"), snap => {
     wallets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (wallets.length === 0) seedDefaultData(); // สร้างข้อมูลเริ่มต้นถ้ายังไม่มี
+    if (wallets.length === 0) seedDefaultData(); 
     renderWalletsUI();
     updateDashboard();
 });
@@ -90,31 +112,30 @@ onSnapshot(collection(db, "goals"), snap => {
     renderGoals();
 });
 
-onSnapshot(query(collection(db, "transactions"), orderBy("date", "desc")), snap => {
+// ดึงข้อมูลทั้งหมดโดยไม่พึ่ง Composite Index ของ Firebase 
+onSnapshot(collection(db, "transactions"), snap => {
     allTx = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     updateDashboard();
     renderCalendar();
 });
 
-// สร้างข้อมูลพื้นฐานอัตโนมัติให้แอปพร้อมใช้
 async function seedDefaultData() {
     await addDoc(collection(db, "wallets"), { name: "เงินสด" });
     await addDoc(collection(db, "wallets"), { name: "บัญชีธนาคาร" });
     const defaultCats = [
-        { name: 'อาหารและของว่าง', emoji: '🥗' },
-        { name: 'เดินทาง', emoji: '🚕' },
+        { name: 'ทั่วไป', emoji: '✨' },
+        { name: 'อาหารและเครื่องดื่ม', emoji: '🍜' },
         { name: 'ช้อปปิ้ง', emoji: '🛍️' },
-        { name: 'ความสวยความงาม', emoji: '💅' },
-        { name: 'รายรับ/เงินเดือน', emoji: '💰' }
+        { name: 'รายรับ', emoji: '💰' }
     ];
     for (let c of defaultCats) await addDoc(collection(db, "categories"), c);
 }
 
 // ==========================================
-// 3. ภาพรวม และ วิเคราะห์ข้อมูล (Dashboard & Insights)
+// 3. ภาพรวม, จัดเรียงข้อมูล และ วิเคราะห์ข้อมูล (Dashboard)
 // ==========================================
 function updateMonthDisplay() {
-    const thMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+    const thMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
     document.getElementById('month-display').textContent = `${thMonths[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
     updateDashboard();
     renderCalendar();
@@ -128,12 +149,20 @@ function updateDashboard() {
     const y = currentDate.getFullYear();
     const m = currentDate.getMonth();
     
-    // กรองข้อมูลตามเดือนและกระเป๋าเงิน
-    const filteredTx = allTx.filter(t => {
+    let filteredTx = allTx.filter(t => {
         const d = new Date(t.date);
         const matchMonth = d.getFullYear() === y && d.getMonth() === m;
         const matchWallet = selectedWalletFilter === 'all' || t.walletId === selectedWalletFilter;
         return matchMonth && matchWallet;
+    });
+
+    // 🚨 แกัปัญหาการเรียงลำดับ (Sorting Logic)
+    // เรียงตามวันที่ (ใหม่ไปเก่า) และถ้าวันเดียวกันให้เรียงตามเวลาที่กดบันทึก (ใหม่ไปเก่า)
+    filteredTx.sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if (dateA !== dateB) return dateB - dateA; // วันที่ต่างกัน
+        return (b.timestamp || 0) - (a.timestamp || 0); // วันเดียวกัน เรียงตามเวลาล่าสุด
     });
 
     let inc = 0, exp = 0;
@@ -142,7 +171,7 @@ function updateDashboard() {
     document.getElementById('tx-count').textContent = `${filteredTx.length} รายการ`;
 
     if (filteredTx.length === 0) {
-        listEl.innerHTML = `<p class="text-center py-8 text-stone-400 text-sm font-light">ยังไม่มีรายการค่าใช้จ่ายในเดือนนี้ค่ะ</p>`;
+        listEl.innerHTML = `<div class="text-center py-10 text-gray-300 text-xs font-medium">ยังไม่มีรายการในเดือนนี้</div>`;
     }
 
     filteredTx.forEach(t => {
@@ -152,30 +181,38 @@ function updateDashboard() {
         const walletObj = wallets.find(w => w.id === t.walletId) || { name: '-' };
         const catObj = categories.find(c => c.id === t.categoryId) || { name: t.categoryName || 'ทั่วไป', emoji: '✨' };
         
-        // ปุ่มดูรูปสลิป
         const receiptBadge = t.receiptUrl 
-            ? `<button onclick="window.viewReceipt('${t.receiptUrl}')" class="ml-2 text-[10px] text-stone-400 hover:text-blush-400 transition"><i class="fa-solid fa-paperclip"></i> สลิป</button>` 
+            ? `<button onclick="window.viewReceipt('${t.receiptUrl}')" class="ml-1 text-gray-400 hover:text-peach-400"><i class="fa-solid fa-paperclip text-[10px]"></i></button>` 
             : '';
 
+        const addedByBadge = `<span class="text-peach-400 ml-1.5"><i class="fa-solid fa-user text-[8px]"></i> ${t.addedBy || 'ไม่ระบุ'}</span>`;
+        const walletBadge = walletObj.name !== '-' ? `<span class="text-[9px] text-gray-400">-</span>` : '';
+
         listEl.insertAdjacentHTML('beforeend', `
-            <div class="flex justify-between items-center bg-white dark:bg-stone-800 p-4 rounded-2xl border border-stone-100 dark:border-stone-700/50 mb-3 shadow-sm">
+            <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] mb-3">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-full bg-stone-50 dark:bg-stone-700 flex items-center justify-center text-lg">${catObj.emoji}</div>
+                    <div class="w-11 h-11 rounded-full bg-orange-50 text-orange-400 flex items-center justify-center text-lg">
+                        ${catObj.emoji}
+                    </div>
                     <div>
-                        <div class="flex items-center gap-2">
-                            <p class="text-sm font-medium">${catObj.name}</p>
-                            <span class="text-[9px] bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 px-2 py-0.5 rounded-full">${walletObj.name}</span>
+                        <div class="flex items-center gap-1.5">
+                            <p class="text-[13px] font-semibold text-gray-700">${catObj.name}</p>
+                            ${walletBadge}
                         </div>
-                        <p class="text-[11px] text-stone-400 font-light mt-0.5">${formatDate(t.date)} ${t.note ? '• ' + t.note : ''} ${receiptBadge}</p>
+                        <div class="flex items-center text-[10px] text-gray-400 mt-1 font-light">
+                            <span>${formatDate(t.date)}${t.note ? ' • ' + t.note : ''}</span>
+                            ${addedByBadge}
+                            ${receiptBadge}
+                        </div>
                     </div>
                 </div>
-                <div class="text-right">
-                    <p class="font-medium text-sm ${t.type === 'income' ? 'text-emerald-500' : 'text-stone-700 dark:text-stone-200'}">
+                <div class="flex flex-col items-end gap-1.5">
+                    <p class="text-sm font-bold ${t.type === 'income' ? 'text-mint-500' : 'text-gray-700'}">
                         ${t.type === 'income' ? '+' : '-'}฿${t.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </p>
-                    <div class="flex justify-end gap-3 mt-1.5 text-xs text-stone-300 dark:text-stone-500">
-                        <button onclick="window.editTx('${t.id}')" class="hover:text-stone-500 dark:hover:text-stone-300 transition"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="window.delTx('${t.id}')" class="hover:text-blush-400 transition"><i class="fa-solid fa-trash"></i></button>
+                    <div class="flex items-center gap-2.5 text-gray-300">
+                        <button onclick="window.editTx('${t.id}')" class="hover:text-gray-500 transition"><i class="fa-solid fa-pen text-[10px]"></i></button>
+                        <button onclick="window.delTx('${t.id}')" class="hover:text-peach-400 transition"><i class="fa-solid fa-trash text-[10px]"></i></button>
                     </div>
                 </div>
             </div>
@@ -186,68 +223,61 @@ function updateDashboard() {
     document.getElementById('total-income').textContent = `฿${inc.toLocaleString()}`;
     document.getElementById('total-expense').textContent = `฿${exp.toLocaleString()}`;
 
-    // คำนวณแถบ Budget 
     const pct = Math.min((exp / BUDGET) * 100, 100) || 0;
     const bBar = document.getElementById('budget-bar');
     document.getElementById('budget-percent').textContent = `${Math.round(pct)}%`;
     bBar.style.width = `${pct}%`;
     
-    // เปลี่ยนสีแถบตามความเหมาะสม
-    if (pct < 60) bBar.className = 'h-2 transition-all duration-700 rounded-full bg-emerald-400';
-    else if (pct < 85) bBar.className = 'h-2 transition-all duration-700 rounded-full bg-amber-400';
-    else bBar.className = 'h-2 transition-all duration-700 rounded-full bg-blush-500';
-
-    if (pct >= 85) document.getElementById('alert-banner').classList.remove('hidden');
-    else document.getElementById('alert-banner').classList.add('hidden');
-
-    generateSmartInsights(filteredTx, exp);
-}
-
-// ระบบวิเคราะห์ข้อความอัตโนมัติแบบนุ่มนวล
-function generateSmartInsights(txList, totalExp) {
-    const insightEl = document.getElementById('smart-insight');
-    const expenses = txList.filter(t => t.type === 'expense');
-    if (expenses.length === 0) {
-        insightEl.textContent = "ยังไม่มีข้อมูลรายจ่ายค่ะ เริ่มบันทึกเพื่อให้ระบบช่วยสรุปข้อมูลให้นะคะ";
-        return;
-    }
-
-    const catTotals = {};
-    expenses.forEach(t => { catTotals[t.categoryId] = (catTotals[t.categoryId] || 0) + t.amount; });
-    const topCatId = Object.keys(catTotals).reduce((a, b) => catTotals[a] > catTotals[b] ? a : b);
-    const topCatObj = categories.find(c => c.id === topCatId) || { name: 'อื่นๆ' };
-    const topPercent = Math.round((catTotals[topCatId] / totalExp) * 100);
-
-    insightEl.innerHTML = `เดือนนี้ยอดใช้จ่ายส่วนใหญ่ไปกับหมวด <b>"${topCatObj.name}"</b> คิดเป็น <b>${topPercent}%</b> ของรายจ่ายทั้งหมด (฿${catTotals[topCatId].toLocaleString()}) ลองดูงบในส่วนนี้นะคะ`;
+    if (pct < 60) bBar.className = 'h-2 transition-all duration-700 rounded-full bg-mint-400';
+    else if (pct < 85) bBar.className = 'h-2 transition-all duration-700 rounded-full bg-orange-400';
+    else bBar.className = 'h-2 transition-all duration-700 rounded-full bg-peach-500';
 }
 
 // ==========================================
-// 4. บันทึกรายการ และ อัปโหลดรูป (Firebase Storage)
+// 4. บันทึกรายการ & อัปโหลดรูประบบ Base64 Compression
 // ==========================================
+
+// ฟังก์ชันบีบอัดรูปภาพด้วย HTML5 Canvas เพื่อลดขนาดไฟล์ก่อนบันทึก
+function compressImage(file, maxWidth, maxHeight, quality) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                let width = img.width, height = img.height;
+                if (width > height) {
+                    if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+                } else {
+                    if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width; canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality)); // รีเทิร์นภาพเป็นข้อความ Base64
+            };
+            img.onerror = (error) => reject(error);
+        };
+        reader.onerror = (error) => reject(error);
+    });
+}
+
 function setTxType(type) {
     txType = type;
     const btnExp = document.getElementById('btn-tx-expense');
     const btnInc = document.getElementById('btn-tx-income');
     if (type === 'expense') {
-        btnExp.className = 'flex-1 py-2.5 text-sm rounded-xl bg-white dark:bg-stone-700 text-blush-500 shadow-sm font-medium transition';
-        btnInc.className = 'flex-1 py-2.5 text-sm rounded-xl text-stone-400 font-light transition';
+        btnExp.className = 'flex-1 py-2.5 text-sm rounded-xl bg-white text-peach-400 shadow-sm font-medium transition';
+        btnInc.className = 'flex-1 py-2.5 text-sm rounded-xl text-gray-400 transition';
     } else {
-        btnInc.className = 'flex-1 py-2.5 text-sm rounded-xl bg-white dark:bg-stone-700 text-emerald-500 shadow-sm font-medium transition';
-        btnExp.className = 'flex-1 py-2.5 text-sm rounded-xl text-stone-400 font-light transition';
+        btnInc.className = 'flex-1 py-2.5 text-sm rounded-xl bg-white text-mint-500 shadow-sm font-medium transition';
+        btnExp.className = 'flex-1 py-2.5 text-sm rounded-xl text-gray-400 transition';
     }
 }
 document.getElementById('btn-tx-expense').onclick = () => setTxType('expense');
 document.getElementById('btn-tx-income').onclick = () => setTxType('income');
-
-document.getElementById('fab-add-tx').onclick = () => {
-    document.getElementById('form-tx').reset();
-    document.getElementById('tx-edit-id').value = '';
-    document.getElementById('modal-tx-title').textContent = 'บันทึกรายการ';
-    document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
-    document.getElementById('tx-receipt-name').textContent = 'ไม่บังคับ';
-    setTxType('expense');
-    document.getElementById('modal-add-tx').classList.remove('hidden');
-};
 
 const receiptInput = document.getElementById('tx-receipt');
 receiptInput.onchange = () => {
@@ -258,18 +288,15 @@ document.getElementById('form-tx').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btn-submit-tx');
     btn.disabled = true;
-    btn.textContent = 'กำลังบันทึก...';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
 
     try {
         const editId = document.getElementById('tx-edit-id').value;
-        let fileUrl = null;
+        let fileBase64 = null;
 
-        // ฟังก์ชันอัปโหลดรูป
+        // บีบอัดรูปลงเหลือความกว้าง 600px และคุณภาพ 70%
         if (receiptInput.files[0]) {
-            const file = receiptInput.files[0];
-            const storageRef = ref(storage, `receipts/${Date.now()}_${file.name}`);
-            await uploadBytes(storageRef, file);
-            fileUrl = await getDownloadURL(storageRef);
+            fileBase64 = await compressImage(receiptInput.files[0], 600, 600, 0.7);
         }
 
         const catId = document.getElementById('tx-category').value;
@@ -283,9 +310,11 @@ document.getElementById('form-tx').addEventListener('submit', async (e) => {
             categoryName: catObj ? catObj.name : 'อื่นๆ',
             date: document.getElementById('tx-date').value,
             note: document.getElementById('tx-note').value,
-            timestamp: new Date()
+            addedBy: currentUser,
+            timestamp: Date.now() // เก็บลำดับเวลาเป็นมิลลิวินาทีเพื่อง่ายต่อการจัดเรียง
         };
-        if (fileUrl) payload.receiptUrl = fileUrl;
+
+        if (fileBase64) payload.receiptUrl = fileBase64; // บันทึกข้อความรูปแทน URL ของ Storage
 
         if (editId) {
             await updateDoc(doc(db, "transactions", editId), payload);
@@ -294,9 +323,11 @@ document.getElementById('form-tx').addEventListener('submit', async (e) => {
             await addDoc(collection(db, "transactions"), payload);
             showToast("บันทึกข้อมูลเรียบร้อย");
         }
-        document.getElementById('modal-add-tx').classList.add('hidden');
+        
+        closeAppModal('modal-add-tx'); // ปิดหน้าต่างให้เรียบร้อย
     } catch (err) {
-        alert("เกิดข้อผิดพลาด: " + err.message);
+        showToast("เกิดข้อผิดพลาดลองใหม่อีกครั้ง", true);
+        console.error(err);
     } finally {
         btn.disabled = false;
         btn.textContent = 'บันทึกข้อมูล';
@@ -314,8 +345,9 @@ window.editTx = (id) => {
     document.getElementById('tx-category').value = tx.categoryId;
     document.getElementById('tx-date').value = tx.date;
     document.getElementById('tx-note').value = tx.note || '';
-    document.getElementById('tx-receipt-name').textContent = tx.receiptUrl ? 'มีรูปเดิมอยู่แล้ว (เลือกเพื่อเปลี่ยน)' : 'ไม่บังคับ';
-    document.getElementById('modal-add-tx').classList.remove('hidden');
+    document.getElementById('tx-receipt-name').textContent = tx.receiptUrl ? 'มีรูปเดิมอยู่แล้ว' : 'ไม่บังคับ';
+    
+    openAppModal('modal-add-tx');
 };
 
 window.delTx = async (id) => {
@@ -347,9 +379,9 @@ function renderWalletsUI() {
         sel.insertAdjacentHTML('beforeend', opt);
         filter.insertAdjacentHTML('beforeend', opt);
         manageList.insertAdjacentHTML('beforeend', `
-            <div class="flex justify-between items-center bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl">
-                <span>${w.name}</span>
-                <button onclick="window.delWallet('${w.id}')" class="text-stone-400 hover:text-blush-400 transition"><i class="fa-solid fa-trash"></i></button>
+            <div class="flex justify-between items-center bg-gray-50 px-4 py-3 rounded-2xl">
+                <span class="text-sm">${w.name}</span>
+                <button onclick="window.delWallet('${w.id}')" class="text-gray-300 hover:text-peach-400"><i class="fa-solid fa-trash text-sm"></i></button>
             </div>
         `);
     });
@@ -364,9 +396,9 @@ function renderCategoriesUI() {
     categories.forEach(c => {
         sel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.emoji} ${c.name}</option>`);
         manageList.insertAdjacentHTML('beforeend', `
-            <div class="flex justify-between items-center bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl">
-                <span>${c.emoji} ${c.name}</span>
-                <button onclick="window.delCat('${c.id}')" class="text-stone-400 hover:text-blush-400 transition"><i class="fa-solid fa-trash"></i></button>
+            <div class="flex justify-between items-center bg-gray-50 px-4 py-3 rounded-2xl">
+                <span class="text-sm">${c.emoji} ${c.name}</span>
+                <button onclick="window.delCat('${c.id}')" class="text-gray-300 hover:text-peach-400"><i class="fa-solid fa-trash text-sm"></i></button>
             </div>
         `);
     });
@@ -400,31 +432,31 @@ document.getElementById('form-goal').onsubmit = async (e) => {
         current: parseFloat(document.getElementById('goal-current').value) || 0
     });
     document.getElementById('form-goal').reset();
-    document.getElementById('modal-goal').classList.add('hidden');
+    closeAppModal('modal-goal');
     showToast("สร้างเป้าหมายเรียบร้อย");
 };
 
 function renderGoals() {
     const list = document.getElementById('goals-list');
-    list.innerHTML = goals.length === 0 ? `<p class="text-center text-stone-400 font-light text-sm py-10">ยังไม่มีเป้าหมายการเก็บเงินค่ะ</p>` : '';
+    list.innerHTML = goals.length === 0 ? `<p class="text-center text-gray-400 font-light text-sm py-10">ยังไม่มีเป้าหมายการเก็บเงินค่ะ</p>` : '';
     
     goals.forEach(g => {
         const pct = Math.min(Math.round((g.current / g.target) * 100), 100);
         list.insertAdjacentHTML('beforeend', `
-            <div class="bg-white dark:bg-stone-800 p-5 rounded-[2rem] border border-stone-100 dark:border-stone-700/50">
+            <div class="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm mb-4">
                 <div class="flex justify-between items-start mb-3">
                     <div>
-                        <h3 class="font-medium text-base">${g.name}</h3>
-                        <p class="text-xs text-stone-400 font-light mt-0.5">เก็บได้ ฿${g.current.toLocaleString()} / ฿${g.target.toLocaleString()}</p>
+                        <h3 class="font-semibold text-sm text-gray-800">${g.name}</h3>
+                        <p class="text-xs text-gray-400 font-light mt-0.5">เก็บได้ ฿${g.current.toLocaleString()} / ฿${g.target.toLocaleString()}</p>
                     </div>
-                    <button onclick="window.addGoalAmt('${g.id}', ${g.current})" class="bg-stone-50 dark:bg-stone-700 text-stone-600 dark:text-stone-200 text-[10px] font-medium px-3 py-1.5 rounded-full hover:bg-blush-50 hover:text-blush-500 transition">+ ออมเพิ่ม</button>
+                    <button onclick="window.addGoalAmt('${g.id}', ${g.current})" class="bg-gray-50 text-gray-600 text-[10px] font-medium px-3 py-1.5 rounded-full hover:bg-peach-50 hover:text-peach-500 transition">+ ออมเพิ่ม</button>
                 </div>
-                <div class="w-full bg-stone-100 dark:bg-stone-700 h-2.5 rounded-full overflow-hidden mb-3">
-                    <div class="h-2.5 bg-gradient-to-r from-blush-300 to-rose-400 transition-all duration-700" style="width: ${pct}%"></div>
+                <div class="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden mb-3">
+                    <div class="h-2.5 bg-peach-400 transition-all duration-700" style="width: ${pct}%"></div>
                 </div>
-                <div class="flex justify-between items-center text-xs font-light">
-                    <span class="text-blush-500 font-medium">สำเร็จแล้ว ${pct}%</span>
-                    <button onclick="window.delGoal('${g.id}')" class="text-stone-300 hover:text-rose-400 transition">ยกเลิกเป้าหมาย</button>
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-peach-500 font-medium">สำเร็จแล้ว ${pct}%</span>
+                    <button onclick="window.delGoal('${g.id}')" class="text-gray-300 hover:text-red-400 transition">ลบ</button>
                 </div>
             </div>
         `);
@@ -434,7 +466,7 @@ window.addGoalAmt = async (id, current) => {
     const add = prompt("ระบุจำนวนเงินที่ต้องการเก็บเพิ่ม (บาท):");
     if (add && !isNaN(add)) {
         await updateDoc(doc(db, "goals", id), { current: current + parseFloat(add) });
-        showToast("บันทึกยอดเก็บเงินเพิ่มแล้วเก่งมากค่ะ 👏");
+        showToast("บันทึกยอดเก็บเงินเพิ่มแล้ว 👏");
     }
 };
 window.delGoal = async (id) => { if (confirm("ต้องการลบเป้าหมายนี้?")) await deleteDoc(doc(db, "goals", id)); };
@@ -460,11 +492,11 @@ function renderCalendar() {
     for (let i = 0; i < firstDay; i++) grid.insertAdjacentHTML('beforeend', '<div></div>');
     for (let day = 1; day <= daysInMonth; day++) {
         const isToday = day === new Date().getDate() && m === new Date().getMonth() && y === new Date().getFullYear();
-        const expText = dailyExp[day] ? `<span class="text-[9px] text-blush-500 font-medium leading-tight mt-1">-${dailyExp[day].toLocaleString()}</span>` : '';
-        const todayStyle = isToday ? 'bg-blush-50 dark:bg-stone-700 text-blush-500 border-blush-100 dark:border-stone-600' : 'bg-white dark:bg-stone-900 border-stone-50 dark:border-stone-800';
+        const expText = dailyExp[day] ? `<span class="text-[9px] text-peach-500 font-medium leading-tight mt-1">-${dailyExp[day].toLocaleString()}</span>` : '';
+        const todayStyle = isToday ? 'bg-peach-50 text-peach-500 border border-peach-100' : 'bg-gray-50 border border-transparent text-gray-700';
         
         grid.insertAdjacentHTML('beforeend', `
-            <div class="h-14 rounded-2xl border flex flex-col items-center justify-start pt-2 px-0.5 ${todayStyle}">
+            <div class="h-14 rounded-2xl flex flex-col items-center justify-start pt-2 px-0.5 ${todayStyle}">
                 <span class="text-xs font-light">${day}</span>
                 ${expText}
             </div>
@@ -473,14 +505,12 @@ function renderCalendar() {
 }
 
 function renderCharts() {
-    const isDark = document.documentElement.classList.contains('dark');
-    const textColor = isDark ? '#a8a29e' : '#78716c'; 
+    const textColor = '#9ca3af'; 
     const pastelPalette = ['#fda4af', '#fcd34d', '#cbd5e1', '#c4b5fd', '#99f6e4', '#fbcfe8'];
 
     const y = currentDate.getFullYear(), m = currentDate.getMonth();
     const curMonthExp = allTx.filter(t => new Date(t.date).getFullYear() === y && new Date(t.date).getMonth() === m && t.type === 'expense');
 
-    // Doughnut Chart
     const catMap = {};
     curMonthExp.forEach(t => {
         const cName = categories.find(c => c.id === t.categoryId)?.name || t.categoryName || 'อื่นๆ';
@@ -497,7 +527,6 @@ function renderCharts() {
         options: { maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: textColor, usePointStyle: true, padding: 20, font: { family: 'Kanit', size: 11, weight: '300' } } } } }
     });
 
-    // Bar Chart
     const labels = [], incArr = [], expArr = [];
     for (let i = 5; i >= 0; i--) {
         const d = new Date(y, m - i, 1);
@@ -517,13 +546,10 @@ function renderCharts() {
                 { label: 'รายจ่าย', data: expArr, backgroundColor: '#fecdd3', borderRadius: 8 }
             ]
         },
-        options: { maintainAspectRatio: false, scales: { x: { ticks: { color: textColor, font:{family:'Kanit', weight:'300'} }, grid:{display:false} }, y: { ticks: { color: textColor, font:{family:'Kanit', weight:'300'} }, border:{dash:[4,4]} } }, plugins: { legend: { labels: { color: textColor, font: { family: 'Kanit', weight: '300' }, usePointStyle: true } } } }
+        options: { maintainAspectRatio: false, scales: { x: { ticks: { color: textColor, font:{family:'Kanit'} }, grid:{display:false} }, y: { ticks: { color: textColor, font:{family:'Kanit'} }, border:{dash:[4,4]} } }, plugins: { legend: { labels: { color: textColor, font: { family: 'Kanit' }, usePointStyle: true } } } }
     });
 }
 
-// ==========================================
-// 8. Service Worker & ตั้งค่า
-// ==========================================
 document.getElementById('save-budget').onclick = async () => {
     const val = parseFloat(document.getElementById('setting-budget').value);
     if (val > 0) {
@@ -532,25 +558,11 @@ document.getElementById('save-budget').onclick = async () => {
     }
 };
 
-// ลงทะเบียน Push Notification
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./service-worker.js');
-}
-
-document.getElementById('enable-push').onclick = async () => {
-    const perm = await Notification.requestPermission();
-    if (perm === 'granted') {
-        showToast("เปิดรับการแจ้งเตือนเรียบร้อย");
-        new Notification("My Expense Tracker", { body: "พร้อมแจ้งเตือนให้บันทึกบัญชีทุกวันแล้วค่ะ 🌷" });
-    } else {
-        alert("คุณบล็อกการแจ้งเตือนไว้ในเบราว์เซอร์ค่ะ");
-    }
-};
-
 function formatDate(dateStr) {
     const d = new Date(dateStr);
     return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 }
 
-// เริ่มต้นโปรแกรม
+// เริ่มโปรแกรม
+checkLogin();
 updateMonthDisplay();
