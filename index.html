@@ -1,230 +1,311 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Family Wallet</title>
-    <!-- โหลด Tailwind CSS -->
+    <title>My Expense Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
-            theme: {
-                extend: {
+            darkMode: 'class',
+            theme: { 
+                extend: { 
+                    fontFamily: { sans: ['Kanit', 'sans-serif'] },
                     colors: {
-                        peach: { 50: '#fff5f5', 100: '#ffe4e6', 500: '#fb7185', 600: '#e11d48' },
-                        mint: { 50: '#f0fdf4', 500: '#4ade80', 600: '#16a34a' },
-                        cream: '#FDFCF8',
-                        textMain: '#4A4A4A'
-                    },
-                    fontFamily: { sans: ['Kanit', 'sans-serif'] }
-                }
+                        stone: { 50: '#fafaf9', 100: '#f5f5f4', 800: '#292524', 900: '#1c1917' },
+                        blush: { 100: '#ffe4e6', 300: '#fda4af', 400: '#fb7185', 500: '#f43f5e' }
+                    }
+                } 
             }
         }
     </script>
-    <!-- โหลด FontAwesome และ Chart.js -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #F3F0EC; -webkit-tap-highlight-color: transparent; }
+        body { -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.5); }
-        .animate-fade { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .toast-enter { transform: translateY(100px); opacity: 0; }
-        .toast-active { transform: translateY(0); opacity: 1; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.3); }
+        .dark .glass { background: rgba(28, 25, 23, 0.85); border-top: 1px solid rgba(255,255,255,0.05); }
+        .toast-active { transform: translate(-50%, 0); opacity: 1; }
+        .toast-hidden { transform: translate(-50%, -100px); opacity: 0; }
     </style>
 </head>
-<body class="text-textMain antialiased flex justify-center selection:bg-peach-100 font-sans">
+<body class="bg-stone-50 dark:bg-stone-900 text-stone-700 dark:text-stone-200 font-sans antialiased flex justify-center transition-colors duration-300">
 
-    <!-- คอนเทนเนอร์หลัก (จำลองขนาดมือถือ) -->
-    <div class="w-full max-w-md bg-cream min-h-screen relative shadow-[0_0_50px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
+    <div class="w-full max-w-md bg-white dark:bg-stone-950 min-h-screen relative shadow-2xl overflow-hidden flex flex-col">
         
-        <main class="flex-1 overflow-y-auto no-scrollbar pb-32">
+        <!-- In-App Alert (แจ้งเตือนงบใกล้หมด) -->
+        <div id="alert-banner" class="hidden bg-blush-500 text-white text-xs px-5 py-3 flex justify-between items-center z-50">
+            <span class="font-light">ระวังนิดนึงนะคะ งบประมาณเดือนนี้ใช้ไปเกิน 85% แล้ว</span>
+            <button onclick="document.getElementById('alert-banner').classList.add('hidden')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <main class="flex-1 overflow-y-auto no-scrollbar pb-32 pt-2 relative">
             
-            <!-- 1. View: Dashboard (Home) -->
-            <section id="view-home" class="view-section block animate-fade px-6 pt-8">
-                <!-- ส่วนเลือกเดือน -->
-                <header class="flex justify-between items-center mb-6 bg-white py-3 px-5 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-50">
-                    <button id="prev-month" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-peach-500 transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
-                    <h1 id="current-month-display" class="text-lg font-medium text-gray-700">โหลดข้อมูล...</h1>
-                    <button id="next-month" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-peach-500 transition-colors"><i class="fa-solid fa-chevron-right"></i></button>
+            <!-- 1. ภาพรวม (Dashboard) -->
+            <section id="view-home" class="view-section px-6 pt-6 block">
+                <header class="flex justify-between items-center mb-6">
+                    <button id="prev-month" class="w-10 h-10 rounded-full bg-stone-50 dark:bg-stone-800 flex items-center justify-center text-stone-400 hover:text-blush-400 transition-colors"><i class="fa-solid fa-chevron-left text-sm"></i></button>
+                    <h1 id="month-display" class="text-base font-medium">กำลังโหลดข้อมูล...</h1>
+                    <button id="next-month" class="w-10 h-10 rounded-full bg-stone-50 dark:bg-stone-800 flex items-center justify-center text-stone-400 hover:text-blush-400 transition-colors"><i class="fa-solid fa-chevron-right text-sm"></i></button>
                 </header>
 
-                <!-- การ์ดยอดเงินคงเหลือ -->
-                <div class="bg-gradient-to-br from-peach-100 to-orange-50 rounded-[2rem] p-7 shadow-sm border border-white relative overflow-hidden mb-5">
-                    <div class="absolute -right-10 -top-10 w-32 h-32 bg-white opacity-40 rounded-full blur-2xl"></div>
-                    <p class="text-gray-600 text-sm font-medium mb-1">ยอดเงินคงเหลือ (เดือนนี้)</p>
-                    <h2 id="total-balance" class="text-4xl font-semibold text-gray-800 tracking-tight">฿0.00</h2>
+                <!-- ตัวกรองกระเป๋าเงิน -->
+                <div class="mb-5">
+                    <select id="wallet-filter" class="w-full bg-stone-50 dark:bg-stone-800 px-4 py-3 rounded-2xl text-sm font-light outline-none border border-transparent focus:border-blush-300 appearance-none">
+                        <option value="all">กระเป๋าเงินทั้งหมด</option>
+                    </select>
                 </div>
 
-                <!-- การ์ดงบประมาณรายจ่าย -->
-                <div class="bg-white rounded-[1.5rem] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-50 mb-6 relative">
-                    <button class="nav-btn-link absolute top-4 right-4 text-gray-300 hover:text-gray-500" data-target="view-settings">
-                        <i class="fa-solid fa-pen-to-square"></i>
-                    </button>
-                    <div class="flex justify-between items-end mb-2 pr-6">
-                        <p id="budget-label" class="text-xs text-gray-400 font-medium">งบประมาณรายจ่าย (กำลังโหลด...)</p>
-                        <p id="budget-text" class="text-sm font-semibold text-gray-700">0%</p>
-                    </div>
-                    <div class="w-full bg-gray-100 rounded-full h-3.5 overflow-hidden">
-                        <div id="budget-bar" class="bg-mint-400 h-3.5 rounded-full transition-all duration-700 ease-out" style="width: 0%"></div>
-                    </div>
-                </div>
-
-                <!-- สรุปรายรับ / รายจ่าย -->
-                <div class="flex gap-4 mb-8">
-                    <div class="flex-1 bg-white rounded-3xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-50 flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-2xl bg-mint-50 text-mint-500 flex items-center justify-center">
-                            <i class="fa-solid fa-arrow-turn-down"></i>
-                        </div>
+                <!-- การ์ดยอดเงิน (สไตล์มินิมอล) -->
+                <div class="bg-gradient-to-br from-blush-300 to-blush-400 text-white p-7 rounded-[2rem] shadow-lg shadow-blush-500/20 relative overflow-hidden mb-6">
+                    <p class="text-xs font-light opacity-90 mb-1">ยอดเงินคงเหลือ</p>
+                    <h2 id="total-balance" class="text-3xl font-semibold mb-6 tracking-tight">฿0.00</h2>
+                    <div class="flex justify-between text-sm bg-white/20 p-4 rounded-2xl backdrop-blur-sm">
                         <div>
-                            <p class="text-[10px] text-gray-400">รายรับ</p>
-                            <p id="total-income" class="text-sm font-semibold text-gray-700">฿0.00</p>
+                            <p class="text-[10px] opacity-80 font-light mb-0.5">รายรับ</p>
+                            <p id="total-income" class="font-medium">฿0.00</p>
                         </div>
-                    </div>
-                    <div class="flex-1 bg-white rounded-3xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-50 flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-2xl bg-peach-50 text-peach-500 flex items-center justify-center">
-                            <i class="fa-solid fa-arrow-turn-up"></i>
-                        </div>
-                        <div>
-                            <p class="text-[10px] text-gray-400">รายจ่าย</p>
-                            <p id="total-expense" class="text-sm font-semibold text-gray-700">฿0.00</p>
+                        <div class="text-right">
+                            <p class="text-[10px] opacity-80 font-light mb-0.5">รายจ่าย</p>
+                            <p id="total-expense" class="font-medium">฿0.00</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- รายการล่าสุด -->
-                <div class="flex justify-between items-end mb-4 px-1">
-                    <h3 class="text-lg font-medium text-gray-700">รายการเดือนนี้</h3>
+                <!-- แถบงบประมาณ -->
+                <div class="mb-6">
+                    <div class="flex justify-between text-xs mb-2 font-light">
+                        <span class="text-stone-400">งบประมาณรายจ่าย (<span id="budget-max-label">15,000</span> ฿)</span>
+                        <span id="budget-percent" class="font-medium text-stone-600 dark:text-stone-300">0%</span>
+                    </div>
+                    <div class="w-full bg-stone-100 dark:bg-stone-800 h-2 rounded-full overflow-hidden">
+                        <div id="budget-bar" class="h-2 bg-stone-300 transition-all duration-700 w-0 rounded-full"></div>
+                    </div>
                 </div>
-                <div id="transaction-list" class="space-y-3 pb-4">
-                    <!-- รายการจาก Firebase จะแสดงที่นี่ -->
+
+                <!-- Smart Insights (ข้อความวิเคราะห์ละมุนๆ) -->
+                <div class="bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-300 p-4 rounded-2xl text-xs mb-8 flex items-start gap-3 font-light">
+                    <i class="fa-solid fa-seedling mt-0.5 text-sm"></i>
+                    <p id="smart-insight" class="leading-relaxed">กำลังรวบรวมข้อมูลพฤติกรรมการใช้จ่ายของคุณ...</p>
+                </div>
+
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-medium text-base">รายการล่าสุด</h3>
+                    <span id="tx-count" class="text-xs font-light text-stone-400">0 รายการ</span>
+                </div>
+                <div id="transaction-list" class="space-y-3"></div>
+            </section>
+
+            <!-- 2. ปฏิทิน (Calendar) -->
+            <section id="view-calendar" class="view-section px-6 pt-6 hidden">
+                <h2 class="text-xl font-medium mb-6">สรุปรายจ่ายแบบปฏิทิน</h2>
+                <div class="bg-stone-50 dark:bg-stone-800 p-5 rounded-3xl">
+                    <div class="grid grid-cols-7 gap-2 text-center text-xs font-light text-stone-400 mb-4">
+                        <div class="text-blush-400">อา</div><div>จ</div><div>อ</div><div>พ</div><div>พฤ</div><div>ศ</div><div>ส</div>
+                    </div>
+                    <div id="calendar-grid" class="grid grid-cols-7 gap-2 text-center text-sm"></div>
                 </div>
             </section>
 
-            <!-- 2. View: Add Transaction (ฟอร์มบันทึก) -->
-            <section id="view-add" class="view-section hidden animate-fade px-6 pt-10">
-                <h2 class="text-2xl font-medium text-gray-700 mb-6">บันทึกรายการใหม่ ✨</h2>
+            <!-- 3. เป้าหมายออมเงิน (Goals) -->
+            <section id="view-goals" class="view-section px-6 pt-6 hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-medium">เป้าหมายการเก็บเงิน</h2>
+                    <button onclick="document.getElementById('modal-goal').classList.remove('hidden')" class="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-light px-4 py-2 rounded-full hover:bg-blush-50 hover:text-blush-500 transition">+ สร้างเป้าหมาย</button>
+                </div>
+                <div id="goals-list" class="space-y-4"></div>
+            </section>
+
+            <!-- 4. สถิติ (Analytics) -->
+            <section id="view-stats" class="view-section px-6 pt-6 hidden">
+                <h2 class="text-xl font-medium mb-6">สถิติและแนวโน้ม</h2>
+                <div class="bg-stone-50 dark:bg-stone-800 p-6 rounded-[2rem] mb-5">
+                    <h3 class="text-sm font-light mb-4 text-center text-stone-500">สัดส่วนรายจ่ายแยกตามหมวดหมู่</h3>
+                    <div class="relative h-56 w-full"><canvas id="pieChart"></canvas></div>
+                </div>
+                <div class="bg-stone-50 dark:bg-stone-800 p-6 rounded-[2rem]">
+                    <h3 class="text-sm font-light mb-4 text-center text-stone-500">แนวโน้ม 6 เดือนย้อนหลัง</h3>
+                    <div class="relative h-56 w-full"><canvas id="barChart"></canvas></div>
+                </div>
+            </section>
+
+            <!-- 5. การตั้งค่า (Settings) -->
+            <section id="view-settings" class="view-section px-6 pt-6 hidden space-y-5">
+                <h2 class="text-xl font-medium mb-6">การตั้งค่า</h2>
                 
-                <form id="add-form" class="space-y-5">
-                    <!-- สลับประเภท รายรับ-รายจ่าย -->
-                    <div class="flex p-1.5 bg-gray-100/50 rounded-2xl relative">
-                        <div id="toggle-bg" class="absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-6px)] bg-white rounded-xl shadow-sm transition-transform duration-300 ease-out"></div>
-                        <button type="button" id="btn-type-expense" class="flex-1 py-3 text-sm font-medium z-10 text-peach-500 transition-colors">รายจ่าย</button>
-                        <button type="button" id="btn-type-income" class="flex-1 py-3 text-sm font-medium z-10 text-gray-400 transition-colors">รายรับ</button>
+                <!-- โหมดมืด & แจ้งเตือน -->
+                <div class="bg-stone-50 dark:bg-stone-800 p-5 rounded-[2rem] space-y-5">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-light">โหมดกลางคืน (Dark Mode)</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="dark-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-stone-200 peer-focus:outline-none rounded-full peer dark:bg-stone-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blush-400"></div>
+                        </label>
                     </div>
-                    <input type="hidden" id="tx-type" value="expense">
-
-                    <div class="bg-white p-6 rounded-[2rem] shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-50 space-y-4">
-                        
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1 ml-1">ใครเป็นคนบันทึก/ใช้จ่าย?</label>
-                            <input type="text" id="tx-member" required list="family-members" class="w-full bg-gray-50/50 border-0 rounded-2xl px-5 py-3.5 text-gray-700 outline-none focus:ring-2 focus:ring-peach-100 transition-all placeholder:text-gray-300" placeholder="เช่น พ่อ, แม่, ลูก">
-                            <datalist id="family-members">
-                                <option value="พ่อ"></option>
-                                <option value="แม่"></option>
-                                <option value="ลูก"></option>
-                            </datalist>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1 ml-1">จำนวนเงิน (บาท)</label>
-                            <input type="number" id="tx-amount" required min="0.01" step="0.01" class="w-full bg-gray-50/50 border-0 rounded-2xl px-5 py-4 text-xl font-medium text-gray-700 outline-none focus:ring-2 focus:ring-peach-100 transition-all placeholder:text-gray-300" placeholder="0.00">
-                        </div>
-
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1 ml-1">หมวดหมู่</label>
-                            <div class="relative">
-                                <select id="tx-category" required class="w-full bg-gray-50/50 border-0 rounded-2xl px-5 py-3.5 text-gray-700 outline-none focus:ring-2 focus:ring-peach-100 transition-all appearance-none">
-                                    <option value="อาหาร">🍜 อาหารและเครื่องดื่ม</option>
-                                    <option value="ของใช้ในบ้าน">🏠 ของใช้ในบ้าน</option>
-                                    <option value="เดินทาง">🚝 การเดินทาง / น้ำมัน</option>
-                                    <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง / เสื้อผ้า</option>
-                                    <option value="บิล">📱 บิล / ค่าน้ำค่าไฟ</option>
-                                    <option value="ลูก">👶 ค่าใช้จ่ายลูก</option>
-                                    <option value="เงินเดือน">💰 เงินเดือน / รายได้</option>
-                                    <option value="อื่นๆ">✨ อื่นๆ</option>
-                                </select>
-                                <i class="fa-solid fa-angle-down absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1 ml-1">วันที่</label>
-                            <input type="date" id="tx-date" required class="w-full bg-gray-50/50 border-0 rounded-2xl px-5 py-3.5 text-gray-700 outline-none focus:ring-2 focus:ring-peach-100 transition-all">
-                        </div>
-
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1 ml-1">บันทึกช่วยจำ (ถ้ามี)</label>
-                            <input type="text" id="tx-note" class="w-full bg-gray-50/50 border-0 rounded-2xl px-5 py-3.5 text-gray-700 outline-none focus:ring-2 focus:ring-peach-100 transition-all placeholder:text-gray-300" placeholder="รายละเอียดเพิ่มเติม...">
-                        </div>
-                    </div>
-
-                    <button type="submit" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-4 rounded-2xl shadow-lg shadow-gray-200 transition-all active:scale-[0.98]">
-                        บันทึกรายการ
-                    </button>
-                </form>
-            </section>
-
-            <!-- 3. View: Statistics (กราฟสรุป) -->
-            <section id="view-stats" class="view-section hidden animate-fade px-6 pt-10">
-                <h2 class="text-2xl font-medium text-gray-700 mb-6">สัดส่วนรายจ่าย 📊</h2>
-                <div class="bg-white p-6 rounded-[2rem] shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-50 mb-6 flex flex-col items-center">
-                    <p id="stats-month-label" class="text-sm text-gray-400 mb-4"></p>
-                    <div class="relative h-64 w-full">
-                        <canvas id="expenseChart"></canvas>
+                    <hr class="border-stone-200 dark:border-stone-700">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-light">แจ้งเตือนบันทึกประจำวัน</span>
+                        <button id="enable-push" class="text-xs bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300 px-4 py-2 rounded-full font-light hover:bg-blush-100 hover:text-blush-500 transition">เปิดใช้งาน</button>
                     </div>
                 </div>
-            </section>
 
-            <!-- 4. View: Settings (ตั้งค่า) -->
-            <section id="view-settings" class="view-section hidden animate-fade px-6 pt-10">
-                <h2 class="text-2xl font-medium text-gray-700 mb-6">ตั้งค่าครอบครัว ⚙️</h2>
-                
-                <div class="bg-white p-6 rounded-[2rem] shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-50 space-y-5">
-                    <form id="settings-form">
-                        <div class="mb-4">
-                            <label class="block text-xs text-gray-400 mb-1 ml-1">เป้าหมายงบประมาณรายจ่ายต่อเดือน (รวมทั้งบ้าน)</label>
-                            <input type="number" id="setting-budget" required min="1" class="w-full bg-gray-50/50 border-0 rounded-2xl px-5 py-4 text-xl font-medium text-gray-700 outline-none focus:ring-2 focus:ring-gray-200 transition-all" placeholder="15000">
-                        </div>
-                        <button type="submit" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-3.5 rounded-2xl shadow-lg shadow-gray-200 transition-all active:scale-[0.98]">
-                            บันทึกการตั้งค่า
-                        </button>
-                    </form>
+                <!-- งบประมาณ -->
+                <div class="bg-stone-50 dark:bg-stone-800 p-5 rounded-[2rem]">
+                    <label class="text-xs text-stone-500 font-light block mb-3">งบประมาณรายจ่ายต่อเดือน (บาท)</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="setting-budget" class="flex-1 bg-white dark:bg-stone-900 p-3.5 rounded-2xl text-sm outline-none border border-transparent focus:border-blush-300">
+                        <button id="save-budget" class="bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900 px-5 py-3.5 rounded-2xl text-sm font-medium">บันทึก</button>
+                    </div>
+                </div>
+
+                <!-- จัดการหมวดหมู่และกระเป๋าเงิน -->
+                <div class="bg-stone-50 dark:bg-stone-800 p-5 rounded-[2rem] space-y-3">
+                    <button onclick="document.getElementById('modal-wallet').classList.remove('hidden')" class="w-full flex justify-between items-center p-4 bg-white dark:bg-stone-900 rounded-2xl text-sm font-light">
+                        <span class="text-stone-600 dark:text-stone-300">จัดการกระเป๋าเงิน</span>
+                        <i class="fa-solid fa-chevron-right text-stone-300 text-xs"></i>
+                    </button>
+                    <button onclick="document.getElementById('modal-category').classList.remove('hidden')" class="w-full flex justify-between items-center p-4 bg-white dark:bg-stone-900 rounded-2xl text-sm font-light">
+                        <span class="text-stone-600 dark:text-stone-300">จัดการหมวดหมู่รายการ</span>
+                        <i class="fa-solid fa-chevron-right text-stone-300 text-xs"></i>
+                    </button>
                 </div>
             </section>
         </main>
 
-        <!-- Bottom Navigation Bar -->
-        <nav class="absolute bottom-6 left-6 right-6 glass-panel rounded-3xl flex justify-around items-center p-2 z-50 shadow-[0_10px_40px_rgba(0,0,0,0.08)]">
-            <button class="nav-btn flex flex-col items-center p-3 text-peach-500 transition-all relative w-16" data-target="view-home">
-                <i class="fa-solid fa-house-chimney text-lg z-10"></i>
-                <div class="nav-indicator absolute inset-0 bg-peach-50 rounded-2xl scale-100 transition-transform"></div>
-            </button>
-            <button class="nav-btn flex flex-col items-center p-3 text-gray-400 hover:text-gray-600 transition-all relative w-16" data-target="view-add">
-                <i class="fa-solid fa-pen text-lg z-10"></i>
-                <div class="nav-indicator absolute inset-0 bg-gray-100 rounded-2xl scale-0 transition-transform"></div>
-            </button>
-            <button class="nav-btn flex flex-col items-center p-3 text-gray-400 hover:text-gray-600 transition-all relative w-16" data-target="view-stats">
-                <i class="fa-solid fa-chart-simple text-lg z-10"></i>
-                <div class="nav-indicator absolute inset-0 bg-gray-100 rounded-2xl scale-0 transition-transform"></div>
-            </button>
-            <button class="nav-btn flex flex-col items-center p-3 text-gray-400 hover:text-gray-600 transition-all relative w-16" data-target="view-settings">
-                <i class="fa-solid fa-gear text-lg z-10"></i>
-                <div class="nav-indicator absolute inset-0 bg-gray-100 rounded-2xl scale-0 transition-transform"></div>
-            </button>
+        <!-- ปุ่มเพิ่มรายการ (FAB) -->
+        <button id="fab-add-tx" class="absolute bottom-28 right-6 w-14 h-14 bg-blush-400 text-white rounded-full shadow-lg shadow-blush-400/40 flex items-center justify-center text-xl hover:scale-105 active:scale-95 transition-transform z-40">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+
+        <!-- Bottom Navigation -->
+        <nav class="absolute bottom-0 w-full glass flex justify-around py-4 pb-6 z-40 text-[10px] font-light">
+            <button class="nav-btn text-blush-400 font-medium flex flex-col items-center gap-1.5" data-target="view-home"><i class="fa-solid fa-house text-lg"></i>ภาพรวม</button>
+            <button class="nav-btn text-stone-400 flex flex-col items-center gap-1.5" data-target="view-calendar"><i class="fa-solid fa-calendar text-lg"></i>ปฏิทิน</button>
+            <button class="nav-btn text-stone-400 flex flex-col items-center gap-1.5" data-target="view-goals"><i class="fa-solid fa-leaf text-lg"></i>ออมเงิน</button>
+            <button class="nav-btn text-stone-400 flex flex-col items-center gap-1.5" data-target="view-stats"><i class="fa-solid fa-chart-pie text-lg"></i>สถิติ</button>
+            <button class="nav-btn text-stone-400 flex flex-col items-center gap-1.5" data-target="view-settings"><i class="fa-solid fa-gear text-lg"></i>ตั้งค่า</button>
         </nav>
 
-        <!-- Toast Notification (แจ้งเตือน) -->
-        <div id="toast" class="absolute top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 z-[100] toast-enter pointer-events-none">
-            <i class="fa-solid fa-circle-check text-mint-500"></i>
-            <span id="toast-msg" class="text-sm font-medium">บันทึกสำเร็จ</span>
+        <!-- ================= MODALS (Popup) ================= -->
+        
+        <!-- 1. Modal บันทึกรายการ -->
+        <div id="modal-add-tx" class="hidden absolute inset-0 bg-stone-900/40 z-50 flex flex-col justify-end backdrop-blur-sm">
+            <div class="bg-white dark:bg-stone-900 rounded-t-[2rem] p-7 max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="modal-tx-title" class="text-lg font-medium">บันทึกรายการ</h2>
+                    <button onclick="document.getElementById('modal-add-tx').classList.add('hidden')" class="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="form-tx" class="space-y-5">
+                    <input type="hidden" id="tx-edit-id" value="">
+                    
+                    <div class="flex gap-2 bg-stone-100 dark:bg-stone-800 p-1.5 rounded-2xl">
+                        <button type="button" id="btn-tx-expense" class="flex-1 py-2.5 text-sm rounded-xl bg-white dark:bg-stone-700 text-blush-500 shadow-sm font-medium transition">รายจ่าย</button>
+                        <button type="button" id="btn-tx-income" class="flex-1 py-2.5 text-sm rounded-xl text-stone-500 transition">รายรับ</button>
+                    </div>
+                    
+                    <div>
+                        <label class="text-xs text-stone-400 font-light block mb-2 px-1">จำนวนเงิน</label>
+                        <input type="number" id="tx-amount" step="0.01" required placeholder="0.00" class="w-full p-4 text-3xl font-medium text-center bg-stone-50 dark:bg-stone-950 rounded-2xl outline-none border border-transparent focus:border-blush-300 transition-colors">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs text-stone-400 font-light block mb-2 px-1">กระเป๋าเงิน</label>
+                            <select id="tx-wallet" required class="w-full p-3.5 bg-stone-50 dark:bg-stone-950 rounded-2xl outline-none text-sm font-light border border-transparent focus:border-blush-300 appearance-none"></select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-stone-400 font-light block mb-2 px-1">หมวดหมู่</label>
+                            <select id="tx-category" required class="w-full p-3.5 bg-stone-50 dark:bg-stone-950 rounded-2xl outline-none text-sm font-light border border-transparent focus:border-blush-300 appearance-none"></select>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="text-xs text-stone-400 font-light block mb-2 px-1">วันที่</label>
+                        <input type="date" id="tx-date" required class="w-full p-3.5 bg-stone-50 dark:bg-stone-950 rounded-2xl outline-none text-sm font-light border border-transparent focus:border-blush-300">
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-stone-400 font-light block mb-2 px-1">บันทึกเพิ่มเติม (Note)</label>
+                        <input type="text" id="tx-note" placeholder="รายละเอียด..." class="w-full p-3.5 bg-stone-50 dark:bg-stone-950 rounded-2xl outline-none text-sm font-light border border-transparent focus:border-blush-300">
+                    </div>
+                    
+                    <!-- แนบสลิป/ใบเสร็จ -->
+                    <div class="bg-stone-50 dark:bg-stone-950 p-4 rounded-2xl border border-dashed border-stone-300 dark:border-stone-700 flex justify-between items-center">
+                        <label class="cursor-pointer flex items-center gap-2 text-sm text-stone-500 font-light">
+                            <i class="fa-solid fa-paperclip text-lg"></i> <span>แนบสลิป / ใบเสร็จ</span>
+                            <input type="file" id="tx-receipt" accept="image/*" class="hidden">
+                        </label>
+                        <span id="tx-receipt-name" class="text-xs text-stone-400 font-light max-w-[120px] truncate">ไม่บังคับ</span>
+                    </div>
+
+                    <button type="submit" id="btn-submit-tx" class="w-full bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900 font-medium py-4 rounded-2xl mt-2 transition">บันทึกข้อมูล</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 2. Modal กระปุกออมเงิน -->
+        <div id="modal-goal" class="hidden absolute inset-0 bg-stone-900/40 z-50 flex items-center justify-center p-6 backdrop-blur-sm">
+            <div class="bg-white dark:bg-stone-900 w-full rounded-[2rem] p-7 shadow-2xl">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-medium">สร้างเป้าหมายใหม่</h2>
+                    <button onclick="document.getElementById('modal-goal').classList.add('hidden')" class="text-stone-400"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="form-goal" class="space-y-4">
+                    <input type="text" id="goal-name" required placeholder="ชื่อเป้าหมาย เช่น ทริปเชียงใหม่" class="w-full p-4 bg-stone-50 dark:bg-stone-950 rounded-2xl outline-none text-sm font-light border border-transparent focus:border-blush-300">
+                    <input type="number" id="goal-target" required placeholder="ยอดเงินเป้าหมาย (บาท)" class="w-full p-4 bg-stone-50 dark:bg-stone-950 rounded-2xl outline-none text-sm font-light border border-transparent focus:border-blush-300">
+                    <input type="number" id="goal-current" placeholder="เงินเริ่มต้นที่มีอยู่ (บาท)" class="w-full p-4 bg-stone-50 dark:bg-stone-950 rounded-2xl outline-none text-sm font-light border border-transparent focus:border-blush-300">
+                    <button type="submit" class="w-full bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900 font-medium py-4 rounded-2xl mt-2">บันทึก</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 3. Modal จัดการกระเป๋าเงิน -->
+        <div id="modal-wallet" class="hidden absolute inset-0 bg-stone-900/40 z-50 flex items-center justify-center p-6 backdrop-blur-sm">
+            <div class="bg-white dark:bg-stone-900 w-full rounded-[2rem] p-7 max-h-[80vh] flex flex-col shadow-2xl">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-medium">จัดการกระเป๋าเงิน</h2>
+                    <button onclick="document.getElementById('modal-wallet').classList.add('hidden')" class="text-stone-400"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="form-wallet" class="flex gap-3 mb-6">
+                    <input type="text" id="wallet-name" required placeholder="เช่น เงินสด, KBank" class="flex-1 p-3.5 bg-stone-50 dark:bg-stone-950 rounded-2xl text-sm font-light outline-none">
+                    <button type="submit" class="bg-blush-400 text-white px-5 rounded-2xl text-sm"><i class="fa-solid fa-plus"></i></button>
+                </form>
+                <div id="wallets-list-manage" class="space-y-3 overflow-y-auto flex-1 font-light text-sm"></div>
+            </div>
+        </div>
+
+        <!-- 4. Modal จัดการหมวดหมู่ -->
+        <div id="modal-category" class="hidden absolute inset-0 bg-stone-900/40 z-50 flex items-center justify-center p-6 backdrop-blur-sm">
+            <div class="bg-white dark:bg-stone-900 w-full rounded-[2rem] p-7 max-h-[80vh] flex flex-col shadow-2xl">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-medium">จัดการหมวดหมู่</h2>
+                    <button onclick="document.getElementById('modal-category').classList.add('hidden')" class="text-stone-400"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="form-category" class="flex gap-3 mb-6">
+                    <input type="text" id="cat-emoji" required placeholder="🍜" maxlength="2" class="w-16 p-3.5 bg-stone-50 dark:bg-stone-950 rounded-2xl text-center text-lg outline-none">
+                    <input type="text" id="cat-name" required placeholder="ชื่อหมวดหมู่" class="flex-1 p-3.5 bg-stone-50 dark:bg-stone-950 rounded-2xl text-sm font-light outline-none">
+                    <button type="submit" class="bg-blush-400 text-white px-5 rounded-2xl text-sm"><i class="fa-solid fa-plus"></i></button>
+                </form>
+                <div id="categories-list-manage" class="space-y-3 overflow-y-auto flex-1 font-light text-sm"></div>
+            </div>
+        </div>
+
+        <!-- 5. Modal ดูรูปสลิปเต็มจอ -->
+        <div id="modal-receipt" class="hidden absolute inset-0 bg-black/90 z-[100] flex items-center justify-center p-6 flex-col">
+            <button onclick="document.getElementById('modal-receipt').classList.add('hidden')" class="text-white text-3xl absolute top-8 right-8 opacity-70 hover:opacity-100"><i class="fa-solid fa-xmark"></i></button>
+            <img id="receipt-full-img" src="" class="max-w-full max-h-[80vh] rounded-2xl">
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="absolute top-8 left-1/2 bg-stone-800 dark:bg-stone-700 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 z-[100] transition-all duration-300 toast-hidden pointer-events-none text-xs font-light">
+            <span id="toast-msg">ดำเนินการสำเร็จ</span>
         </div>
     </div>
 
-    <!-- เรียกใช้ JavaScript แบบ Module -->
+    <!-- เรียกใช้สคริปต์หลัก -->
     <script type="module" src="app.js"></script>
 </body>
 </html>
